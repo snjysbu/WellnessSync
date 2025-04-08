@@ -71,9 +71,10 @@ object RepositoryModule {
     @Singleton
     fun provideActivityRepository(
         activityDao: ActivityDao,
-        activityRemoteDataSource: ActivityRemoteDataSource
+        activityRemoteDataSource: ActivityRemoteDataSource,
+        userPreferences: UserPreferences
     ): ActivityRepository {
-        return ActivityRepositoryImpl(activityDao, activityRemoteDataSource)
+        return ActivityRepositoryImpl(activityDao, activityRemoteDataSource, userPreferences)
     }
 
     @Provides

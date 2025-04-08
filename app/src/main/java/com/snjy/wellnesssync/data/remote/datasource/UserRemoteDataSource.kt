@@ -3,120 +3,154 @@ package com.snjy.wellnesssync.data.remote.datasource
 import android.util.Log
 import com.snjy.wellnesssync.data.remote.api.SupabaseService
 import com.snjy.wellnesssync.data.remote.dto.UserDto
-import com.snjy.wellnesssync.data.remote.dto.toDomainModel
-import com.snjy.wellnesssync.domain.model.User
-import java.util.UUID
 import javax.inject.Inject
 
 class UserRemoteDataSource @Inject constructor(
     private val supabaseService: SupabaseService
 ) {
-    private val TAG = "UserRemoteDataSource"
+    private val tag = "UserRemoteDataSource" // Fixed capitalization
 
-    suspend fun registerUser(userDto: UserDto): Result<UserDto> {
+    suspend fun registerUser(credentials: Map<String, String>): Result<Map<String, Any>> {
         return try {
-            Log.d(TAG, "Attempting to register user: ${userDto.email}")
-            val response = supabaseService.registerUser(userDto)
+            Log.d(tag, "Attempting to register user: ${credentials["email"]}")
+            val response = supabaseService.registerUser(credentials)
+            Log.d(tag, "Registration response code: ${response.code()}")
 
             if (response.isSuccessful && response.body() != null) {
-                Log.d(TAG, "Registration successful")
+                Log.d(tag, "Registration successful")
                 Result.success(response.body()!!)
             } else {
-                Log.e(TAG, "Registration failed: ${response.code()} - ${response.message()}")
-                if (response.errorBody() != null) {
-                    Log.e(TAG, "Error body: ${response.errorBody()?.string()}")
-                }
-                Result.failure(Exception("Registration failed: ${response.message()}"))
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                val errorMsg = "Registration failed: ${response.message()} - $errorBody"
+                Log.e(tag, errorMsg)
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception during registration", e)
+            Log.e(tag, "Registration exception", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createUserProfile(token: String, userDto: UserDto): Result<UserDto> {
+        return try {
+            Log.d(tag, "Creating user profile for ID: ${userDto.id}")
+            // Fix: Pass parameters in the correct order
+            val response = supabaseService.createUserProfile(token, "return=representation", userDto)
+            Log.d(tag, "CreateUserProfile response code: ${response.code()}")
+
+            if (response.isSuccessful && response.body() != null) {
+                Log.d(tag, "User profile created successfully")
+                Result.success(response.body()!!)
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                val errorMsg = "Failed to create user profile: ${response.message()} - $errorBody"
+                Log.e(tag, errorMsg)
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "CreateUserProfile exception", e)
             Result.failure(e)
         }
     }
 
     suspend fun loginUser(email: String, password: String): Result<String> {
         return try {
-            Log.d(TAG, "Attempting to login user: $email")
+            Log.d(tag, "Attempting to login user: $email")
             val credentials = mapOf(
                 "email" to email,
                 "password" to password
             )
-
             val response = supabaseService.loginUser(credentials)
+            Log.d(tag, "Login response code: ${response.code()}")
+
             if (response.isSuccessful && response.body() != null) {
                 val responseBody = response.body()!!
                 val token = responseBody["access_token"] as? String
-
                 if (token != null) {
-                    Log.d(TAG, "Login successful")
+                    Log.d(tag, "Login successful, token received")
                     Result.success(token)
                 } else {
-                    Log.e(TAG, "Login failed: Token not found in response")
-                    Result.failure(Exception("Login failed: Token not found"))
+                    val errorMsg = "Login failed: Token not found in response"
+                    Log.e(tag, errorMsg)
+                    Result.failure(Exception(errorMsg))
                 }
             } else {
-                Log.e(TAG, "Login failed: ${response.code()} - ${response.message()}")
-                if (response.errorBody() != null) {
-                    Log.e(TAG, "Error body: ${response.errorBody()?.string()}")
-                }
-                Result.failure(Exception("Login failed: ${response.message()}"))
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                val errorMsg = "Login failed: ${response.message()} - $errorBody"
+                Log.e(tag, errorMsg)
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception during login", e)
+            Log.e(tag, "Login exception", e)
             Result.failure(e)
         }
     }
 
     suspend fun logoutUser(token: String): Result<Unit> {
         return try {
-            Log.d(TAG, "Attempting to logout user with token")
+            Log.d(tag, "Attempting to logout user")
             val response = supabaseService.logoutUser("Bearer $token")
+            Log.d(tag, "Logout response code: ${response.code()}")
 
             if (response.isSuccessful) {
-                Log.d(TAG, "Logout successful")
+                Log.d(tag, "Logout successful")
                 Result.success(Unit)
             } else {
-                Log.e(TAG, "Logout failed: ${response.code()} - ${response.message()}")
-                Result.failure(Exception("Logout failed: ${response.message()}"))
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                val errorMsg = "Logout failed: ${response.message()} - $errorBody"
+                Log.e(tag, errorMsg)
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception during logout", e)
+            Log.e(tag, "Logout exception", e)
             Result.failure(e)
         }
     }
 
-    suspend fun getUserProfile(token: String, userId: String): Result<UserDto> {
+    suspend fun getUserProfile(token: String, userId: String): Result<List<UserDto>> {
         return try {
-            Log.d(TAG, "Fetching user profile for ID: $userId")
+            Log.d(tag, "Fetching user profile for ID: $userId")
             val response = supabaseService.getUserProfile("Bearer $token", userId)
+            Log.d(tag, "GetUserProfile response code: ${response.code()}")
 
             if (response.isSuccessful && response.body() != null) {
-                Log.d(TAG, "User profile retrieved successfully")
+                Log.d(tag, "User profile fetched successfully")
                 Result.success(response.body()!!)
             } else {
-                Log.e(TAG, "Failed to get user profile: ${response.code()} - ${response.message()}")
-                Result.failure(Exception("Failed to get user profile: ${response.message()}"))
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                val errorMsg = "Failed to get user profile: ${response.message()} - $errorBody"
+                Log.e(tag, errorMsg)
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception when fetching user profile", e)
+            Log.e(tag, "GetUserProfile exception", e)
             Result.failure(e)
         }
     }
 
-    suspend fun updateUserProfile(token: String, userDto: UserDto): Result<UserDto> {
+    suspend fun updateUserProfile(token: String, userDto: UserDto, userId: String): Result<UserDto> {
         return try {
-            Log.d(TAG, "Updating user profile for ID: ${userDto.id}")
-            val response = supabaseService.updateUserProfile("Bearer $token", userDto)
+            Log.d(tag, "Updating user profile for ID: $userId")
+            // Fix: Pass parameters in the correct order and type
+            val response = supabaseService.updateUserProfile(
+                token = "Bearer $token",
+                prefer = "return=representation",
+                user = userDto,
+                userId = userId
+            )
+            Log.d(tag, "UpdateUserProfile response code: ${response.code()}")
 
             if (response.isSuccessful && response.body() != null) {
-                Log.d(TAG, "User profile updated successfully")
+                Log.d(tag, "User profile updated successfully")
                 Result.success(response.body()!!)
             } else {
-                Log.e(TAG, "Failed to update user profile: ${response.code()} - ${response.message()}")
-                Result.failure(Exception("Failed to update user profile: ${response.message()}"))
+                val errorBody = response.errorBody()?.string() ?: "Unknown error"
+                val errorMsg = "Failed to update user profile: ${response.message()} - $errorBody"
+                Log.e(tag, errorMsg)
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception when updating user profile", e)
+            Log.e(tag, "UpdateUserProfile exception", e)
             Result.failure(e)
         }
     }

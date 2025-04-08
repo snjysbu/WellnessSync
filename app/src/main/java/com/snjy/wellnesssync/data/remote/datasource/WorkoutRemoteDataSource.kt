@@ -10,41 +10,42 @@ class WorkoutRemoteDataSource @Inject constructor(
     private val supabaseService: SupabaseService,
     private val videoService: VideoService
 ) {
-    private val TAG = "WorkoutRemoteDataSource"
+    private val tag = "WorkoutRemoteDataSource"
 
     suspend fun getAllWorkouts(token: String): Result<List<WorkoutDto>> {
         return try {
-            Log.d(TAG, "Fetching all workouts with token: $token")
+            Log.d(tag, "Fetching all workouts with token: $token")
             val response = supabaseService.getAllWorkouts(token)
-            Log.d(TAG, "Response code: ${response.code()}")
+            Log.d(tag, "Response code: ${response.code()}")
 
             if (response.isSuccessful && response.body() != null) {
                 val workouts = response.body()!!
-                Log.d(TAG, "Fetched ${workouts.size} workouts successfully")
+                Log.d(tag, "Fetched ${workouts.size} workouts successfully")
 
                 // Enhance workouts with proper YouTube thumbnail URLs if needed
                 val enhancedWorkouts = workouts.map { workout ->
                     val videoId = videoService.extractVideoId(workout.videoUrl)
-                    workout.copy(thumbnailUrl = videoService.getThumbnailUrl(videoId))
+                    val thumbnailUrl = videoService.getThumbnailUrl(videoId) ?: ""
+                    workout.copy(thumbnailUrl = thumbnailUrl)
                 }
                 Result.success(enhancedWorkouts)
             } else {
                 val errorMsg = "Failed to fetch workouts: ${response.message()} - Code: ${response.code()}"
-                Log.e(TAG, errorMsg)
+                Log.e(tag, errorMsg)
                 if (response.errorBody() != null) {
-                    Log.e(TAG, "Error body: ${response.errorBody()?.string()}")
+                    Log.e(tag, "Error body: ${response.errorBody()?.string()}")
                 }
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception fetching workouts", e)
+            Log.e(tag, "Exception fetching workouts", e)
             Result.failure(e)
         }
     }
 
     suspend fun getWorkoutsByCategory(token: String, category: String): Result<List<WorkoutDto>> {
         return try {
-            Log.d(TAG, "Fetching workouts by category: $category")
+            Log.d(tag, "Fetching workouts by category: $category")
             val response = supabaseService.getWorkoutsByCategory(token, category)
 
             if (response.isSuccessful && response.body() != null) {
@@ -52,38 +53,40 @@ class WorkoutRemoteDataSource @Inject constructor(
                 // Enhance workouts with proper YouTube thumbnail URLs if needed
                 val enhancedWorkouts = workouts.map { workout ->
                     val videoId = videoService.extractVideoId(workout.videoUrl)
-                    workout.copy(thumbnailUrl = videoService.getThumbnailUrl(videoId))
+                    val thumbnailUrl = videoService.getThumbnailUrl(videoId) ?: ""
+                    workout.copy(thumbnailUrl = thumbnailUrl)
                 }
                 Result.success(enhancedWorkouts)
             } else {
                 val errorMsg = "Failed to fetch workouts by category: ${response.message()}"
-                Log.e(TAG, errorMsg)
+                Log.e(tag, errorMsg)
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception in getWorkoutsByCategory", e)
+            Log.e(tag, "Exception in getWorkoutsByCategory", e)
             Result.failure(e)
         }
     }
 
     suspend fun getWorkoutById(token: String, workoutId: String): Result<WorkoutDto> {
         return try {
-            Log.d(TAG, "Fetching workout by ID: $workoutId")
+            Log.d(tag, "Fetching workout by ID: $workoutId")
             val response = supabaseService.getWorkoutById(token, workoutId)
 
             if (response.isSuccessful && response.body() != null) {
                 val workout = response.body()!!
                 // Enhance workout with proper YouTube thumbnail URL if needed
                 val videoId = videoService.extractVideoId(workout.videoUrl)
-                val enhancedWorkout = workout.copy(thumbnailUrl = videoService.getThumbnailUrl(videoId))
+                val thumbnailUrl = videoService.getThumbnailUrl(videoId) ?: ""
+                val enhancedWorkout = workout.copy(thumbnailUrl = thumbnailUrl)
                 Result.success(enhancedWorkout)
             } else {
                 val errorMsg = "Failed to fetch workout: ${response.message()}"
-                Log.e(TAG, errorMsg)
+                Log.e(tag, errorMsg)
                 Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception in getWorkoutById", e)
+            Log.e(tag, "Exception in getWorkoutById", e)
             Result.failure(e)
         }
     }

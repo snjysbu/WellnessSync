@@ -15,64 +15,74 @@ import retrofit2.http.Query
 
 interface SupabaseService {
     // Authentication
-    @POST("auth/v1/signup")
-    suspend fun registerUser(@Body user: UserDto): Response<UserDto>
+    @POST("/auth/v1/signup")
+    suspend fun registerUser(@Body credentials: Map<String, String>): Response<Map<String, Any>>
 
-    @POST("auth/v1/token?grant_type=password")
+    @POST("/auth/v1/token?grant_type=password")
     suspend fun loginUser(@Body credentials: Map<String, String>): Response<Map<String, Any>>
 
-    @POST("auth/v1/logout")
+    @POST("/auth/v1/logout")
     suspend fun logoutUser(@Header("Authorization") token: String): Response<Unit>
 
     // User
-    @GET("rest/v1/users")
+    @POST("/rest/v1/users")
+    suspend fun createUserProfile(
+        @Header("Authorization") token: String,
+        @Header("Prefer") prefer: String = "return=representation",
+        @Body user: UserDto
+    ): Response<UserDto>
+
+    @GET("/rest/v1/users")
     suspend fun getUserProfile(
         @Header("Authorization") token: String,
         @Query("id") userId: String,
         @Query("select") select: String = "*"
-    ): Response<UserDto>
+    ): Response<List<UserDto>>
 
-    @PUT("rest/v1/users")
+    @PUT("/rest/v1/users")
     suspend fun updateUserProfile(
         @Header("Authorization") token: String,
-        @Body user: UserDto
+        @Header("Prefer") prefer: String = "return=representation",
+        @Body user: UserDto,
+        @Query("id") userId: String
     ): Response<UserDto>
 
     // Activities
-    @GET("rest/v1/activities")
+    @GET("/rest/v1/activities")
     suspend fun getUserActivities(
         @Header("Authorization") token: String,
         @Query("user_id") userId: String,
         @Query("select") select: String = "*"
     ): Response<List<ActivityDto>>
 
-    @POST("rest/v1/activities")
+    @POST("/rest/v1/activities")
     suspend fun createActivity(
         @Header("Authorization") token: String,
+        @Header("Prefer") prefer: String = "return=representation",
         @Body activity: ActivityDto
     ): Response<ActivityDto>
 
-    @DELETE("rest/v1/activities")
+    @DELETE("/rest/v1/activities")
     suspend fun deleteActivity(
         @Header("Authorization") token: String,
         @Query("id") activityId: String
     ): Response<Unit>
 
     // Workouts
-    @GET("rest/v1/workouts")
+    @GET("/rest/v1/workouts")
     suspend fun getAllWorkouts(
         @Header("Authorization") token: String,
         @Query("select") select: String = "*"
     ): Response<List<WorkoutDto>>
 
-    @GET("rest/v1/workouts")
+    @GET("/rest/v1/workouts")
     suspend fun getWorkoutsByCategory(
         @Header("Authorization") token: String,
         @Query("category") category: String,
         @Query("select") select: String = "*"
     ): Response<List<WorkoutDto>>
 
-    @GET("rest/v1/workouts")
+    @GET("/rest/v1/workouts")
     suspend fun getWorkoutById(
         @Header("Authorization") token: String,
         @Query("id") workoutId: String,

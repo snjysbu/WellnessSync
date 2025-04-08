@@ -22,6 +22,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -29,10 +31,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.snjy.wellnesssync.domain.model.DietaryPreference
@@ -48,9 +52,21 @@ fun RegisterScreen(
     viewModel: RegisterViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
+    // Show error snackbar if there's a general error
+    LaunchedEffect(state.generalError) {
+        state.generalError?.let { error ->
+            Log.d("RegisterScreen", "Showing error snackbar: $error")
+            snackbarHostState.showSnackbar(error)
+        }
+    }
+
+    // Navigate on successful registration
     LaunchedEffect(key1 = true) {
+        Log.d("RegisterScreen", "Setting up event collection")
         viewModel.events.collect { event ->
+            Log.d("RegisterScreen", "Received event: $event")
             when (event) {
                 is RegisterEvent.RegisterSuccess -> {
                     Log.d("RegisterScreen", "Registration success, navigating...")
@@ -73,7 +89,8 @@ fun RegisterScreen(
                     containerColor = LightPrimary
                 )
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -204,7 +221,22 @@ fun RegisterScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // General error display
+                if (state.generalError != null) {
+                    Text(
+                        text = state.generalError!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 WellnessSyncButton(
                     text = "Register",

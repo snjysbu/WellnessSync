@@ -1,5 +1,6 @@
 package com.snjy.wellnesssync.presentation.screens.auth.register
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.snjy.wellnesssync.domain.usecase.auth.RegisterUseCase
@@ -18,6 +19,7 @@ import javax.inject.Inject
 class RegisterViewModel @Inject constructor(
     private val registerUseCase: RegisterUseCase
 ) : ViewModel() {
+    private val TAG = "RegisterViewModel"
 
     private val _state = MutableStateFlow(RegisterState())
     val state: StateFlow<RegisterState> = _state.asStateFlow()
@@ -26,72 +28,87 @@ class RegisterViewModel @Inject constructor(
     val events: SharedFlow<RegisterEvent> = _events.asSharedFlow()
 
     fun onNameChanged(name: String) {
-        _state.update { it.copy(name = name, nameError = null) }
+        _state.update { it.copy(name = name, nameError = null, generalError = null) }
     }
 
     fun onEmailChanged(email: String) {
-        _state.update { it.copy(email = email, emailError = null) }
+        _state.update { it.copy(email = email, emailError = null, generalError = null) }
     }
 
     fun onPasswordChanged(password: String) {
-        _state.update { it.copy(password = password, passwordError = null) }
+        _state.update { it.copy(password = password, passwordError = null, generalError = null) }
     }
 
     fun onAgeChanged(age: String) {
-        _state.update { it.copy(age = age, ageError = null) }
+        _state.update { it.copy(age = age, ageError = null, generalError = null) }
     }
 
     fun onHeightChanged(height: String) {
-        _state.update { it.copy(height = height, heightError = null) }
+        _state.update { it.copy(height = height, heightError = null, generalError = null) }
     }
 
     fun onWeightChanged(weight: String) {
-        _state.update { it.copy(weight = weight, weightError = null) }
+        _state.update { it.copy(weight = weight, weightError = null, generalError = null) }
     }
 
     fun onProfessionChanged(profession: String) {
-        _state.update { it.copy(profession = profession, professionError = null) }
+        _state.update { it.copy(profession = profession, professionError = null, generalError = null) }
     }
 
     fun onDietaryPreferenceChanged(dietaryPreference: String) {
-        _state.update { it.copy(dietaryPreference = dietaryPreference, dietaryPreferenceError = null) }
+        _state.update { it.copy(dietaryPreference = dietaryPreference, dietaryPreferenceError = null, generalError = null) }
     }
 
     fun register() {
+        Log.d(TAG, "Register function called")
         if (!validateInputs()) {
+            Log.d(TAG, "Input validation failed")
             return
         }
 
         viewModelScope.launch {
+            Log.d(TAG, "Starting registration process for: ${_state.value.email}")
             _state.update { it.copy(isLoading = true, generalError = null) }
 
-            val ageInt = _state.value.age.toIntOrNull() ?: 0
-            val heightDouble = _state.value.height.toDoubleOrNull() ?: 0.0
-            val weightDouble = _state.value.weight.toDoubleOrNull() ?: 0.0
+            try {
+                val ageInt = _state.value.age.toIntOrNull() ?: 0
+                val heightDouble = _state.value.height.toDoubleOrNull() ?: 0.0
+                val weightDouble = _state.value.weight.toDoubleOrNull() ?: 0.0
 
-            registerUseCase(
-                name = _state.value.name.trim(),
-                email = _state.value.email.trim(),
-                password = _state.value.password,
-                age = ageInt,
-                height = heightDouble,
-                weight = weightDouble,
-                profession = _state.value.profession.trim(),
-                dietaryPreference = _state.value.dietaryPreference
-            ).fold(
-                onSuccess = {
-                    _state.update { it.copy(isLoading = false) }
-                    _events.emit(RegisterEvent.RegisterSuccess)
-                },
-                onFailure = { error ->
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            generalError = error.message ?: "An unknown error occurred"
-                        )
+                registerUseCase(
+                    name = _state.value.name.trim(),
+                    email = _state.value.email.trim(),
+                    password = _state.value.password,
+                    age = ageInt,
+                    height = heightDouble,
+                    weight = weightDouble,
+                    profession = _state.value.profession.trim(),
+                    dietaryPreference = _state.value.dietaryPreference
+                ).fold(
+                    onSuccess = {
+                        Log.d(TAG, "Registration successful")
+                        _state.update { it.copy(isLoading = false) }
+                        _events.emit(RegisterEvent.RegisterSuccess)
+                    },
+                    onFailure = { error ->
+                        Log.e(TAG, "Registration failed", error)
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                generalError = error.message ?: "An unknown error occurred"
+                            )
+                        }
                     }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception during registration", e)
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        generalError = "An unexpected error occurred: ${e.message}"
+                    )
                 }
-            )
+            }
         }
     }
 

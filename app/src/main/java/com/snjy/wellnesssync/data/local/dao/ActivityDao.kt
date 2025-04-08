@@ -26,4 +26,7 @@ interface ActivityDao {
 
     @Query("DELETE FROM activities WHERE id = :activityId")
     suspend fun deleteActivity(activityId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllActivities(activities: List<ActivityEntity>)
 }

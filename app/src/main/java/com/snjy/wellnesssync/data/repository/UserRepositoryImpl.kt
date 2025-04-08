@@ -35,88 +35,115 @@ class UserRepositoryImpl @Inject constructor(
         profession: String,
         dietaryPreference: String
     ): Result<User> {
-        // Create a UserDto to pass to the remote data source
-        val userDto = UserDto(
-            id = UUID.randomUUID().toString(),
-            name = name,
-            email = email,
-            age = age,
-            height = height,
-            weight = weight,
-            profession = profession,
-            dietaryPreference = dietaryPreference,
-            profileImageUrl = null
-        )
+        try {
+            Log.d(TAG, "Starting registration process for: $email")
 
-        return userRemoteDataSource.registerUser(userDto).map { registeredUserDto ->
-            // Convert DTO to domain model
-            val user = registeredUserDto.toDomainModel()
-
-            // Save user to local database
-            userDao.insertUser(user.toEntity())
-
-            // After successful registration, perform login
-            userRemoteDataSource.loginUser(email, password).fold(
-                onSuccess = { token ->
-                    userPreferences.saveUserSession(user.id, token)
-                },
-                onFailure = {
-                    Log.e(TAG, "Login failed after registration: ${it.message}")
-                }
+            // Step 1: Register the user with Supabase Authentication
+            val authRequest = mapOf(
+                "email" to email,
+                "password" to password
             )
 
-            user
+            val authResponse = userRemoteDataSource.registerUser(authRequest)
+
+            return authResponse.fold(
+                onSuccess = { authData ->
+                    Log.d(TAG, "Auth registration successful")
+
+                    // Extract the user ID and token from auth response
+                    val userId = (authData["user"] as? Map<*, *>)?.get("id")?.toString() ?: UUID.randomUUID().toString()
+                    val token = authData["access_token"]?.toString() ?: ""
+
+                    Log.d(TAG, "User ID from auth: $userId")
+
+                    if (token.isBlank()) {
+                        Log.e(TAG, "No token received after registration")
+                        return Result.failure(Exception("Authentication failed: No token received"))
+                    }
+
+                    // Step 2: Create a user profile in the database
+                    val userDto = UserDto(
+                        id = userId,
+                        name = name,
+                        email = email,
+                        age = age,
+                        height = height,
+                        weight = weight,
+                        profession = profession,
+                        dietaryPreference = dietaryPreference,
+                        profileImageUrl = null
+                    )
+
+                    // Create user profile in Supabase database
+                    val userProfileResult = userRemoteDataSource.createUserProfile("Bearer $token", userDto)
+
+                    userProfileResult.fold(
+                        onSuccess = { profileData ->
+                            Log.d(TAG, "User profile created successfully")
+
+                            // Create domain model and save to local DB
+                            val user = profileData.toDomainModel()
+                            userDao.insertUser(user.toEntity())
+
+                            // Save user session
+                            userPreferences.saveUserSession(userId, token)
+
+                            return Result.success(user)
+                        },
+                        onFailure = { error ->
+                            Log.e(TAG, "Failed to create user profile", error)
+                            return Result.failure(error)
+                        }
+                    )
+                },
+                onFailure = { error ->
+                    Log.e(TAG, "Auth registration failed", error)
+                    return Result.failure(error)
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during registration process", e)
+            return Result.failure(e)
         }
     }
 
     override suspend fun loginUser(email: String, password: String): Result<User> {
         return userRemoteDataSource.loginUser(email, password).map { token ->
+            Log.d(TAG, "Login successful, token received")
+
             // Get or create user in local DB
             val localUser = userDao.getUserByEmail(email)
 
             val user = if (localUser != null) {
+                Log.d(TAG, "Found user in local database")
                 localUser.toDomainModel()
             } else {
+                Log.d(TAG, "User not found in local database, fetching from remote")
                 // Fetch user details from remote
-                val result = userPreferences.userId.first()?.let { userId ->
-                    userRemoteDataSource.getUserProfile(token, userId)
-                }
+                // We'll try to get the user ID from the JWT token
+                val userId = extractUserIdFromToken(token)
 
-                if (result != null) {
-                    val remoteUser = result.getOrNull()
-                    if (remoteUser != null) {
-                        val domainUser = remoteUser.toDomainModel()
-                        userDao.insertUser(domainUser.toEntity())
-                        domainUser
-                    } else {
-                        // Create a placeholder user with minimal info
-                        val placeholderUser = User(
-                            id = UUID.randomUUID().toString(),
-                            name = "User",
-                            email = email,
-                            age = 0,
-                            height = 0.0,
-                            weight = 0.0,
-                            profession = "",
-                            dietaryPreference = DietaryPreference.VEGETARIAN
-                        )
-                        userDao.insertUser(placeholderUser.toEntity())
-                        placeholderUser
-                    }
-                } else {
-                    // Create a placeholder user with minimal info
-                    val placeholderUser = User(
-                        id = UUID.randomUUID().toString(),
-                        name = "User",
-                        email = email,
-                        age = 0,
-                        height = 0.0,
-                        weight = 0.0,
-                        profession = "",
-                        dietaryPreference = DietaryPreference.VEGETARIAN
+                if (userId != null) {
+                    val result = userRemoteDataSource.getUserProfile(token, userId)
+
+                    result.fold(
+                        onSuccess = { userDtoList ->
+                            if (userDtoList.isNotEmpty()) {
+                                val userDto = userDtoList.first()
+                                val domainUser = userDto.toDomainModel()
+                                userDao.insertUser(domainUser.toEntity())
+                                domainUser
+                            } else {
+                                createPlaceholderUser(email)
+                            }
+                        },
+                        onFailure = {
+                            Log.e(TAG, "Failed to get user profile after login", it)
+                            createPlaceholderUser(email)
+                        }
                     )
-                    userDao.insertUser(placeholderUser.toEntity())
-                    placeholderUser
+                } else {
+                    createPlaceholderUser(email)
                 }
             }
 
@@ -125,6 +152,37 @@ class UserRepositoryImpl @Inject constructor(
 
             user
         }
+    }
+
+    private fun extractUserIdFromToken(token: String): String? {
+        // A very simple JWT token parsing to extract user ID
+        // In a real app, use a proper JWT library
+        try {
+            val parts = token.split(".")
+            if (parts.size >= 2) {
+                val payload = String(android.util.Base64.decode(parts[1], android.util.Base64.URL_SAFE))
+                val payloadJson = org.json.JSONObject(payload)
+                return payloadJson.optString("sub")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to extract user ID from token", e)
+        }
+        return null
+    }
+
+    private suspend fun createPlaceholderUser(email: String): User {
+        val placeholderUser = User(
+            id = UUID.randomUUID().toString(),
+            name = "User",
+            email = email,
+            age = 0,
+            height = 0.0,
+            weight = 0.0,
+            profession = "",
+            dietaryPreference = DietaryPreference.VEGETARIAN
+        )
+        userDao.insertUser(placeholderUser.toEntity())
+        return placeholderUser
     }
 
     override suspend fun logoutUser(): Result<Unit> {
@@ -146,17 +204,21 @@ class UserRepositoryImpl @Inject constructor(
         }
 
         // Fall back to remote
-        return userRemoteDataSource.getUserProfile(token, userId).map { userDto ->
-            val user = userDto.toDomainModel()
-            userDao.insertUser(user.toEntity())
-            user
+        return userRemoteDataSource.getUserProfile(token, userId).map { userDtoList ->
+            if (userDtoList.isNotEmpty()) {
+                val userDto = userDtoList.first()
+                val user = userDto.toDomainModel()
+                userDao.insertUser(user.toEntity())
+                user
+            } else {
+                throw Exception("User not found")
+            }
         }
     }
 
     override suspend fun updateUserProfile(user: User): Result<User> {
         val token = userPreferences.authToken.first() ?: return Result.failure(Exception("User not logged in"))
 
-        // Convert domain model to DTO for the remote data source
         val userDto = UserDto(
             id = user.id,
             name = user.name,
@@ -169,7 +231,7 @@ class UserRepositoryImpl @Inject constructor(
             profileImageUrl = user.profileImageUrl
         )
 
-        return userRemoteDataSource.updateUserProfile(token, userDto).map { remoteUserDto ->
+        return userRemoteDataSource.updateUserProfile(token, userDto, user.id).map { remoteUserDto ->
             val updatedUser = remoteUserDto.toDomainModel()
             userDao.updateUser(updatedUser.toEntity())
             updatedUser
