@@ -3,6 +3,7 @@ package com.snjy.wellnesssync.di
 import com.snjy.wellnesssync.data.remote.api.GeminiService
 import com.snjy.wellnesssync.data.remote.api.SupabaseService
 import com.snjy.wellnesssync.data.remote.api.VideoService
+import com.snjy.wellnesssync.data.remote.api.YouTubeVideoService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -45,11 +46,10 @@ object NetworkModule {
             .build()
     }
 
-    // Rest of your code remains the same
     @Provides
     @Singleton
     fun provideVideoService(): VideoService {
-        return VideoService()
+        return YouTubeVideoService()
     }
 
     @Provides

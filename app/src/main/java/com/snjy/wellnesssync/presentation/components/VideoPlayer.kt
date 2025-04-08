@@ -4,6 +4,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
@@ -26,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -33,6 +35,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import coil.compose.AsyncImage
 import com.snjy.wellnesssync.data.remote.api.VideoService
 import com.snjy.wellnesssync.presentation.theme.LightPrimary
 import com.snjy.wellnesssync.presentation.theme.SecondaryDark
@@ -49,6 +52,7 @@ fun VideoPlayer(
     var isPlaying by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isPlayerInitialized by remember { mutableStateOf(false) }
 
     // Create an ExoPlayer instance
     val exoPlayer = remember {
@@ -62,6 +66,9 @@ fun VideoPlayer(
                 override fun onIsPlayingChanged(isCurrentlyPlaying: Boolean) {
                     super.onIsPlayingChanged(isCurrentlyPlaying)
                     isPlaying = isCurrentlyPlaying
+                    if (isCurrentlyPlaying) {
+                        isPlayerInitialized = true
+                    }
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
@@ -79,9 +86,7 @@ fun VideoPlayer(
     }
 
     // Cleanup player when the composable is disposed
-    DisposableEffect(
-        key1 = exoPlayer
-    ) {
+    DisposableEffect(key1 = exoPlayer) {
         onDispose {
             exoPlayer.release()
         }
@@ -97,28 +102,33 @@ fun VideoPlayer(
     ) {
         if (errorMessage != null) {
             // Error state
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ErrorOutline,
-                        contentDescription = "Error",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Text(
-                        text = errorMessage ?: "Error loading video",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.ErrorOutline,
+                    contentDescription = "Error",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(48.dp)
+                )
+                Text(
+                    text = errorMessage ?: "Error loading video",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
             }
         } else {
+            // Show thumbnail if available and player not yet initialized
+            if (thumbnailUrl != null && !isPlayerInitialized && !autoPlay) {
+                AsyncImage(
+                    model = thumbnailUrl,
+                    contentDescription = "Video Thumbnail",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             // Video player
             AndroidView(
                 factory = { ctx ->
@@ -196,37 +206,38 @@ fun YouTubeVideoPlayer(
         videoService.getThumbnailUrl(videoId)
     }
 
-    // Use the standard video player with the processed YouTube URL
-    VideoPlayer(
-        videoUrl = videoUrl,
-        thumbnailUrl = thumbnailUrl,
-        modifier = modifier,
-        autoPlay = autoPlay
-    )
-}
-
-@androidx.compose.runtime.Composable
-private fun Column(
-    horizontalAlignment: Alignment.Horizontal,
-    content: @Composable () -> Unit
-) {
-    androidx.compose.foundation.layout.Column(
-        horizontalAlignment = horizontalAlignment
+    // Launch YouTube app or fallback to browser when the video is played
+    Box(modifier = modifier
+        .fillMaxWidth()
+        .aspectRatio(16f / 9f)
+        .clip(RoundedCornerShape(12.dp))
+        .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
     ) {
-        content()
-    }
-}
+        // Show thumbnail
+        thumbnailUrl?.let {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = "Video Thumbnail",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
 
-@Composable
-private fun Box(
-    modifier: Modifier = Modifier,
-    contentAlignment: Alignment = Alignment.TopStart,
-    content: @Composable () -> Unit
-) {
-    androidx.compose.foundation.layout.Box(
-        modifier = modifier,
-        contentAlignment = contentAlignment
-    ) {
-        content()
+        // Play button
+        FloatingActionButton(
+            onClick = {
+                videoService.openYouTubeVideo(context, videoId)
+            },
+            containerColor = LightPrimary,
+            contentColor = SecondaryDark,
+            modifier = Modifier.size(56.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = "Play on YouTube",
+                modifier = Modifier.size(32.dp)
+            )
+        }
     }
 }

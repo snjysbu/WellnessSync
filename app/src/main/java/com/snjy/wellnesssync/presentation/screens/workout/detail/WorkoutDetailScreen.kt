@@ -1,22 +1,28 @@
 package com.snjy.wellnesssync.presentation.screens.workout.detail
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,12 +36,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import com.snjy.wellnesssync.data.remote.api.VideoService
 import com.snjy.wellnesssync.domain.model.Workout
-import com.snjy.wellnesssync.presentation.components.VideoPlayer
 import com.snjy.wellnesssync.presentation.components.WellnessSyncButton
 import com.snjy.wellnesssync.presentation.theme.LightPrimary
+import com.snjy.wellnesssync.presentation.theme.SecondaryDark
+import javax.inject.Inject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,7 +66,7 @@ fun WorkoutDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(state.workout?.name ?: "Workout Details") },
+                title = { Text(state.workout?.name ?: "Workout Details", color = Color.Black) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -82,7 +95,7 @@ fun WorkoutDetailScreen(
                 state.workout?.let { workout ->
                     WorkoutContent(
                         workout = workout,
-                        onStartWorkout = { /* Handle start workout */ }
+                        onStartWorkout = { viewModel.openWorkoutVideo(workout.videoUrl) }
                     )
                 }
             }
@@ -95,18 +108,47 @@ private fun WorkoutContent(
     workout: Workout,
     onStartWorkout: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        // Video player
-        VideoPlayer(
-            videoUrl = workout.videoUrl,
-            thumbnailUrl = workout.thumbnailUrl,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // Video thumbnail with play button overlay
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            // Thumbnail image
+            if (workout.thumbnailUrl.isNotEmpty()) {
+                AsyncImage(
+                    model = workout.thumbnailUrl,
+                    contentDescription = "Video Thumbnail",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // Play button overlay
+            FloatingActionButton(
+                onClick = onStartWorkout,
+                containerColor = LightPrimary,
+                contentColor = SecondaryDark,
+                modifier = Modifier.size(56.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Play Video",
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
