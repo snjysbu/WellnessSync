@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -95,7 +96,7 @@ fun LoginScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    painter = painterResource(id = R.mipmap.ic_launcher_foreground),
                     contentDescription = "App Logo",
                     tint = LightPrimary,
                     modifier = Modifier.size(80.dp)
@@ -168,7 +169,13 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 val registerText = buildAnnotatedString {
-                    append("Don't have an account? ")
+                    withStyle(
+                        style = SpanStyle(
+                            color = Color.Gray // Change this to any color you want
+                        )
+                    ) {
+                        append("Don't have an account? ")
+                    }
                     withStyle(
                         style = SpanStyle(
                             color = LightPrimary,
